@@ -15,7 +15,7 @@ def filtros_processos():
     responsaveis.insert(0, "Todos")
     filtro_responsavel = st.sidebar.selectbox("Responsável Geral", options=responsaveis, key="filtro_responsavel")
     
-    filtro_status = st.sidebar.selectbox("Status", options=["Todos", "No prazo", "Atrasado", "Concluído"], key="filtro_status")
+    filtro_status = st.sidebar.selectbox("Status", options=["Todos", "No prazo", "Atrasado", "Finalizado no prazo", "Finalizado atrasado"], key="filtro_status")
     
     st.sidebar.markdown("### Data de Criação")
     col1, col2 = st.sidebar.columns(2)
