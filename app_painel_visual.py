@@ -116,10 +116,10 @@ def painel_visual(user):
     with tabs[0]:
         if processos:
             st.markdown("### Processos")
-            header_cols = st.columns([1, 3, 2, 2, 2, 2, 2, 2])
-            headers = ["ID", "Nome", "Resp. Geral", "Criação", "Término Ideal", "Término Real", "Tempo Total", "Status"]
+            header_cols = st.columns([1, 3, 2, 2, 2, 2, 2, 2, 1])
+            headers = ["ID", "Nome", "Resp. Geral", "Criação", "Término Ideal", "Término Real", "Tempo Total", "Status", "Ação"]
             for idx, title in enumerate(headers):
-                header_cols[idx].markdown(f"**{title}**")
+                header_cols[idx].markdown(f"<p style='text-align:center'>{title}</p>", unsafe_allow_html=True)
             for processo in processos:
                 conn = get_connection()
                 cursor = conn.cursor()
@@ -138,14 +138,14 @@ def painel_visual(user):
                 else:
                     status_colored = status_calc
                 row_cols = st.columns([1, 3, 2, 2, 2, 2, 2, 2, 1])
-                row_cols[0].write(processo["id"])
-                row_cols[1].write(processo["nome_processo"])
-                row_cols[2].write(processo["responsavel_geral"])
-                row_cols[3].write(processo["data_criacao"])
-                row_cols[4].write(processo["data_termino_ideal"])
-                row_cols[5].write(processo["data_termino_real"] if processo["data_termino_real"] else "")
-                row_cols[6].write(tempo_total)
-                row_cols[7].markdown(status_colored, unsafe_allow_html=True)
+                row_cols[0].markdown(f"<p style='text-align:center'>{processo['id']}</p>", unsafe_allow_html=True)
+                row_cols[1].markdown(f"<p style='text-align:center'>{processo['nome_processo']}</p>", unsafe_allow_html=True)
+                row_cols[2].markdown(f"<p style='text-align:center'>{processo['responsavel_geral']}</p>", unsafe_allow_html=True)
+                row_cols[3].markdown(f"<p style='text-align:center'>{processo['data_criacao']}</p>", unsafe_allow_html=True)
+                row_cols[4].markdown(f"<p style='text-align:center'>{processo['data_termino_ideal']}</p>", unsafe_allow_html=True)
+                row_cols[5].markdown(f"<p style='text-align:center'>{processo['data_termino_real'] if processo['data_termino_real'] else ''}</p>", unsafe_allow_html=True)
+                row_cols[6].markdown(f"<p style='text-align:center'>{tempo_total}</p>", unsafe_allow_html=True)
+                row_cols[7].markdown(f"<p style='text-align:center'>{status_colored}</p>", unsafe_allow_html=True)
                 if row_cols[8].button("Apagar", key=f"apagar_{processo['id']}"):
                     delete_processo(processo["id"])
                     st.rerun()
@@ -161,23 +161,20 @@ def painel_visual(user):
             cursor.execute("SELECT * FROM etapas WHERE processo_id=? ORDER BY id", (processo["id"],))
             etapas = cursor.fetchall()
             conn.close()
-            status_calc = calcular_status(processo, etapas)
-            st.markdown(f"### {processo['nome_processo']} — Status: **{status_calc}**")
+            st.markdown(f"### {processo['nome_processo']}")
             tempos = calcular_tempo_etapa(etapas, processo["data_criacao"])
             etapas_html = ""
             for idx, etapa in enumerate(etapas):
+                # Define cor da bolinha conforme se concluída ou não
                 if etapa["data_termino_real"]:
-                    cor_etapa = "#28a745"
+                    cor_etapa = "#28a745"  # Verde
                 else:
-                    if etapa["nome_etapa"] and etapa["responsavel_etapa"]:
-                        cor_etapa = "#ffc107"
-                    else:
-                        cor_etapa = "#ffffff"
+                    cor_etapa = "#ffc107" if etapa["nome_etapa"] and etapa["responsavel_etapa"] else "#ffffff"
                 etapas_html += f"""
                 <div style="display:inline-block; text-align:center; margin:10px; vertical-align:middle;">
                     <div style="width:60px; height:60px; border-radius:50%; background-color:{cor_etapa}; 
                         display:flex; align-items:center; justify-content:center; border:2px solid #000; font-size:10px; overflow:hidden;">
-                        <span style="word-wrap: break-word;">{etapa['nome_etapa'] if etapa['nome_etapa'] else 'N/A'}</span>
+                        <span style="word-break: break-word;">{etapa['nome_etapa'] if etapa['nome_etapa'] else 'N/A'}</span>
                     </div>
                     <div style="margin-top:5px; font-size:10px;">
                         {etapa['responsavel_etapa'] if etapa['responsavel_etapa'] else 'Sem resp.'}<br>
