@@ -2,6 +2,9 @@ import streamlit as st
 from db_connect import get_connection
 import datetime
 
+def combine_date_time(date_obj, time_obj):
+    return date_obj.strftime("%d/%m/%Y") + " " + time_obj.strftime("%H:%M:%S")
+
 def criar_processo():
     st.header("Criar Novo Processo")
     col_main, col_etapas = st.columns(2)
@@ -10,10 +13,9 @@ def criar_processo():
         nome_processo = st.text_input("Nome do Processo", key="cp_nome_processo")
         responsavel_geral = st.text_input("Responsável Geral", key="cp_responsavel_geral")
         etapas_quantidade = st.number_input("Quantidade de Etapas", min_value=1, step=1, value=1, key="cp_qtd_etapas")
-        # Seletor de data e hora para a data de término ideal
         dt_ideal_date = st.date_input("Data de Término Ideal", key="cp_data_termino_ideal_date")
         dt_ideal_time = st.time_input("Hora de Término Ideal", key="cp_data_termino_ideal_time")
-        data_termino_ideal = dt_ideal_date.strftime("%d/%m/%Y") + " " + dt_ideal_time.strftime("%H:%M:%S")
+        data_termino_ideal = combine_date_time(dt_ideal_date, dt_ideal_time)
     with col_etapas:
         st.subheader("Configurar Etapas")
         etapa_nome_list = []
