@@ -1,5 +1,9 @@
 import streamlit as st
 from db_connect import get_connection
+import datetime
+
+def combine_date_time(date_obj, time_obj):
+    return date_obj.strftime("%d/%m/%Y") + " " + time_obj.strftime("%H:%M:%S")
 
 def atualizar_processo():
     st.header("Atualizar Processo")
@@ -20,20 +24,30 @@ def atualizar_processo():
             cursor = conn.cursor()
             cursor.execute("SELECT * FROM processos WHERE id=?", (processo_id,))
             processo = cursor.fetchone()
-            cursor.execute("SELECT * FROM etapas WHERE processo_id=?", (processo_id,))
+            cursor.execute("SELECT * FROM etapas WHERE processo_id=? ORDER BY id", (processo_id,))
             etapas = cursor.fetchall()
             conn.close()
             
             st.subheader("Atualize os Dados Editáveis")
             novo_nome = st.text_input("Nome do Processo", value=processo["nome_processo"], key="upd_nome_processo")
             novo_resp_geral = st.text_input("Responsável Geral", value=processo["responsavel_geral"], key="upd_resp_geral")
-            novo_data_term_ideal = st.text_input("Data de Término Ideal", value=processo["data_termino_ideal"], key="upd_data_term_ideal")
-            novo_data_term_real = st.text_input("Data de Término Real", value=processo["data_termino_real"] if processo["data_termino_real"] else "", key="upd_data_term_real")
             
-            st.subheader("Atualize os Dados Não Editáveis")
-            st.text_input("Data de Criação", value=processo["data_criacao"], disabled=True)
-            st.text_input("Tempo Total", value=str(processo["tempo_total"]), disabled=True)
-            st.text_input("Status", value=processo["status"], disabled=True)
+            # Atualização da data de término ideal com seletores
+            dt_term_ideal = None
+            try:
+                dt_term_ideal = datetime.datetime.strptime(processo["data_termino_ideal"], "%d/%m/%Y %H:%M:%S")
+            except:
+                dt_term_ideal = datetime.datetime.now()
+            novo_dt_ideal_date = st.date_input("Data de Término Ideal", value=dt_term_ideal.date(), key="upd_dt_ideal_date")
+            novo_dt_ideal_time = st.time_input("Hora de Término Ideal", value=dt_term_ideal.time(), key="upd_dt_ideal_time")
+            novo_data_term_ideal = combine_date_time(novo_dt_ideal_date, novo_dt_ideal_time)
+            
+            # Exibe Data de Término Real (não editável)
+            st.text_input("Data de Término Real", value=processo["data_termino_real"] if processo["data_termino_real"] else "", disabled=True, key="upd_dt_real")
+            
+            st.subheader("Dados Não Editáveis")
+            st.text_input("Data de Criação", value=processo["data_criacao"], disabled=True, key="upd_data_criacao")
+            st.text_input("Tempo Total", value=str(processo["tempo_total"]), disabled=True, key="upd_tempo_total")
             
             st.subheader("Atualize as Etapas (Editáveis)")
             novos_dados_etapas = []
@@ -44,15 +58,15 @@ def atualizar_processo():
                 with col2:
                     novo_resp_etapa = st.text_input(f"Responsável da Etapa {etapa['id']}", value=etapa["responsavel_etapa"], key=f"upd_resp_etapa_{etapa['id']}")
                 with col3:
-                    novo_data_term_etapa = st.text_input(f"Término Real Etapa {etapa['id']}", value=etapa["data_termino_real"] if etapa["data_termino_real"] else "", key=f"upd_data_term_etapa_{etapa['id']}")
-                novos_dados_etapas.append((etapa["id"], novo_nome_etapa, novo_resp_etapa, novo_data_term_etapa))
+                    novo_dt_term_etapa = st.text_input(f"Término Real Etapa {etapa['id']}", value=etapa["data_termino_real"] if etapa["data_termino_real"] else "", key=f"upd_dt_term_etapa_{etapa['id']}")
+                novos_dados_etapas.append((etapa["id"], novo_nome_etapa, novo_resp_etapa, novo_dt_term_etapa))
             
             if st.button("Atualizar Processo", key="btn_atualizar_processo"):
                 conn = get_connection()
                 cursor = conn.cursor()
                 cursor.execute(
-                    "UPDATE processos SET nome_processo=?, responsavel_geral=?, data_termino_ideal=?, data_termino_real=? WHERE id=?",
-                    (novo_nome, novo_resp_geral, novo_data_term_ideal, novo_data_term_real, processo_id)
+                    "UPDATE processos SET nome_processo=?, responsavel_geral=?, data_termino_ideal=? WHERE id=?",
+                    (novo_nome, novo_resp_geral, novo_data_term_ideal, processo_id)
                 )
                 for etapa_id, nome_at, resp_at, dt_term in novos_dados_etapas:
                     cursor.execute(
