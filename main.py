@@ -22,23 +22,23 @@ def main():
     create_tables()
     st.title("Gestão de Processos e Tarefas")
 
-    # Exibe o formulário de login caso o usuário não esteja logado.
+    # Se o usuário não estiver logado, exibe o formulário de login.
     if 'user' not in st.session_state:
         login()
         if 'user' not in st.session_state:
             st.stop()
-        # Logo após o login bem-sucedido, define página para "visualizar"
+        # Após login bem-sucedido, define a página inicial.
         st.session_state.pagina = "visualizar"
 
-    # Botão de logout – substituindo experimental_set_query_params por st.query_params
+    # Botão de logout
     if st.sidebar.button("Logout", key="logout_button"):
         st.session_state.clear()
-        st.query_params(page="login")
+        st.set_query_params(page="login")
         st.stop()
 
     st.sidebar.write(f"Usuário: {st.session_state.user['username']} (Nível {st.session_state.user['nivel']})")
 
-    # Navegação por botões com keys únicas
+    # Navegação por botões (chave única em cada um)
     st.sidebar.markdown("### Ações")
     if st.sidebar.button("Visualizar Processos", key="btn_visualizar"):
         st.session_state.pagina = "visualizar"
