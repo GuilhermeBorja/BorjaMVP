@@ -1,4 +1,6 @@
 import sqlite3
+import os
+import sys
 
 DATABASE = 'app.db'
 
@@ -57,6 +59,19 @@ def create_tables():
 
     conn.close()
 
-if __name__ == "__main__":
+def reset_database():
+    if os.path.exists(DATABASE):
+        os.remove(DATABASE)
+        print("Banco de dados apagado.")
     create_tables()
-    print("Tabelas criadas com sucesso e usuário admin inserido permanentemente!")
+    print("Banco de dados reiniciado com sucesso!")
+
+if __name__ == "__main__":
+    # Para apagar e reiniciar o banco de dados, execute:
+    #    python db_connect.py --reset
+    # Caso contrário, as tabelas serão criadas normalmente com o usuário admin inserido.
+    if "--reset" in sys.argv:
+        reset_database()
+    else:
+        create_tables()
+        print("Tabelas criadas com sucesso e usuário admin inserido permanentemente!")
