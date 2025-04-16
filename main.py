@@ -6,21 +6,31 @@ from app_painel_visual import painel_visual
 from db_connect import create_tables
 
 st.set_page_config(layout="wide")
+st.markdown("""
+    <style>
+    [data-testid="stSidebar"] { 
+        min-width: 300px; 
+        max-width: 300px;
+    }
+    [data-testid="stSidebarNav"] {
+        width: 300px;
+    }
+    </style>
+""", unsafe_allow_html=True)
 
 def main():
     create_tables()
     st.title("Gestão de Processos e Tarefas")
 
-    # Se o usuário não estiver logado, exibe o formulário de login
+    # Exibe o formulário de login caso o usuário não esteja logado.
     if 'user' not in st.session_state:
         login()
         if 'user' not in st.session_state:
             st.stop()
-
-        # Após login bem-sucedido, forçamos a página de Visualizar Processos
+        # Logo após o login bem-sucedido, define página para "visualizar"
         st.session_state.pagina = "visualizar"
 
-    # Botão de logout
+    # Botão de logout – substituindo experimental_set_query_params por st.query_params
     if st.sidebar.button("Logout", key="logout_button"):
         st.session_state.clear()
         st.query_params(page="login")
@@ -28,7 +38,7 @@ def main():
 
     st.sidebar.write(f"Usuário: {st.session_state.user['username']} (Nível {st.session_state.user['nivel']})")
 
-    # Navegação via botões com keys únicas
+    # Navegação por botões com keys únicas
     st.sidebar.markdown("### Ações")
     if st.sidebar.button("Visualizar Processos", key="btn_visualizar"):
         st.session_state.pagina = "visualizar"
