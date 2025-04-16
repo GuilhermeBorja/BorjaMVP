@@ -3,7 +3,7 @@ from db_connect import get_connection
 import datetime
 
 def combine_date_time(date_obj, time_obj):
-    return date_obj.strftime("%d/%m/%Y") + " " + time_obj.strftime("%H:%M:%S")
+    return date_obj.strftime("%d/%m/%Y") + " " + time_obj.strftime("%H:%M")
 
 def criar_processo():
     st.header("Criar Novo Processo")
@@ -30,7 +30,7 @@ def criar_processo():
             etapa_resp_list.append(responsavel_etapa)
 
     if st.button("Salvar Processo", key="botao_salvar_processo"):
-        data_criacao = datetime.datetime.now().strftime("%d/%m/%Y %H:%M:%S")
+        data_criacao = datetime.datetime.now().strftime("%d/%m/%Y %H:%M")
         conn = get_connection()
         cursor = conn.cursor()
         cursor.execute(
