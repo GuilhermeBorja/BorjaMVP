@@ -14,13 +14,13 @@ def format_timedelta(delta):
 
 def calcular_tempo_total(processo, etapas):
     try:
-        dt_criacao = datetime.datetime.strptime(processo["data_criacao"], "%d/%m/%Y %H:%M:%S")
+        dt_criacao = datetime.datetime.strptime(processo["data_criacao"], "%d/%m/%Y %H:%M")
     except:
         return ""
     if etapas and all(etapa["data_termino_real"] for etapa in etapas):
         ultima = etapas[-1]["data_termino_real"]
         try:
-            dt_ultima = datetime.datetime.strptime(ultima, "%d/%m/%Y %H:%M:%S")
+            dt_ultima = datetime.datetime.strptime(ultima, "%d/%m/%Y %H:%M")
         except:
             return ""
         delta = dt_ultima - dt_criacao
@@ -31,8 +31,8 @@ def calcular_tempo_total(processo, etapas):
 def calcular_status(processo, etapas):
     if etapas and all(etapa["data_termino_real"] for etapa in etapas):
         try:
-            dt_ideal = datetime.datetime.strptime(processo["data_termino_ideal"], "%d/%m/%Y %H:%M:%S")
-            dt_ultima = datetime.datetime.strptime(etapas[-1]["data_termino_real"], "%d/%m/%Y %H:%M:%S")
+            dt_ideal = datetime.datetime.strptime(processo["data_termino_ideal"], "%d/%m/%Y %H:%M")
+            dt_ultima = datetime.datetime.strptime(etapas[-1]["data_termino_real"], "%d/%m/%Y %H:%M")
             if dt_ultima <= dt_ideal:
                 return "Finalizado no prazo"
             else:
@@ -41,7 +41,7 @@ def calcular_status(processo, etapas):
             return "Finalizado"
     else:
         try:
-            dt_ideal = datetime.datetime.strptime(processo["data_termino_ideal"], "%d/%m/%Y %H:%M:%S")
+            dt_ideal = datetime.datetime.strptime(processo["data_termino_ideal"], "%d/%m/%Y %H:%M")
             if datetime.datetime.now() > dt_ideal:
                 return "Atrasado"
             else:
@@ -60,13 +60,13 @@ def delete_processo(processo_id):
 def calcular_tempo_etapa(etapas, data_criacao):
     tempos = []
     try:
-        dt_prev = datetime.datetime.strptime(data_criacao, "%d/%m/%Y %H:%M:%S")
+        dt_prev = datetime.datetime.strptime(data_criacao, "%d/%m/%Y %H:%M")
     except:
         dt_prev = datetime.datetime.now()
     for idx, etapa in enumerate(etapas):
         if etapa["data_termino_real"]:
             try:
-                dt_atual = datetime.datetime.strptime(etapa["data_termino_real"], "%d/%m/%Y %H:%M:%S")
+                dt_atual = datetime.datetime.strptime(etapa["data_termino_real"], "%d/%m/%Y %H:%M")
             except:
                 dt_atual = datetime.datetime.now()
         else:
@@ -74,7 +74,7 @@ def calcular_tempo_etapa(etapas, data_criacao):
         delta = dt_atual - dt_prev
         tempos.append(format_timedelta(delta))
         if etapa["data_termino_real"]:
-            dt_prev = datetime.datetime.strptime(etapa["data_termino_real"], "%d/%m/%Y %H:%M:%S")
+            dt_prev = datetime.datetime.strptime(etapa["data_termino_real"], "%d/%m/%Y %H:%M")
         else:
             dt_prev = datetime.datetime.now()
     return tempos
@@ -119,7 +119,7 @@ def painel_visual(user):
             header_cols = st.columns([1, 3, 2, 2, 2, 2, 2, 2, 1])
             headers = ["ID", "Nome", "Resp. Geral", "Criação", "Término Ideal", "Término Real", "Tempo Total", "Status", "Ação"]
             for idx, title in enumerate(headers):
-                header_cols[idx].markdown(f"<p style='text-align:center'>{title}</p>", unsafe_allow_html=True)
+                header_cols[idx].markdown(f"<p style='text-align:center; font-weight:bold'>{title}</p>", unsafe_allow_html=True)
             for processo in processos:
                 conn = get_connection()
                 cursor = conn.cursor()
@@ -161,11 +161,11 @@ def painel_visual(user):
             cursor.execute("SELECT * FROM etapas WHERE processo_id=? ORDER BY id", (processo["id"],))
             etapas = cursor.fetchall()
             conn.close()
-            st.markdown(f"### {processo['nome_processo']}")
+            st.markdown(f"<h3 style='text-align:center'>{processo['nome_processo']}</h3>", unsafe_allow_html=True)
             tempos = calcular_tempo_etapa(etapas, processo["data_criacao"])
             etapas_html = ""
             for idx, etapa in enumerate(etapas):
-                # Define cor da bolinha conforme se concluída ou não
+                # Define cor da bolinha conforme se a etapa está concluída ou não
                 if etapa["data_termino_real"]:
                     cor_etapa = "#28a745"  # Verde
                 else:
@@ -174,14 +174,14 @@ def painel_visual(user):
                 <div style="display:inline-block; text-align:center; margin:10px; vertical-align:middle;">
                     <div style="width:60px; height:60px; border-radius:50%; background-color:{cor_etapa}; 
                         display:flex; align-items:center; justify-content:center; border:2px solid #000; font-size:10px; overflow:hidden;">
-                        <span style="word-break: break-word;">{etapa['nome_etapa'] if etapa['nome_etapa'] else 'N/A'}</span>
+                        <span style="word-break: break-word; text-align:center;">{etapa['nome_etapa'] if etapa['nome_etapa'] else 'N/A'}</span>
                     </div>
-                    <div style="margin-top:5px; font-size:10px;">
+                    <div style="margin-top:5px; font-size:10px; text-align:center;">
                         {etapa['responsavel_etapa'] if etapa['responsavel_etapa'] else 'Sem resp.'}<br>
-                        Tempo: {tempos[idx]}
+                        {tempos[idx]}
                     </div>
                 </div>
                 """
                 if idx < len(etapas) - 1:
                     etapas_html += """<span style="font-size:24px; margin:0 5px; display:inline-flex; align-items:center;">&#8594;</span>"""
-            st.markdown(etapas_html, unsafe_allow_html=True)
+            st.markdown(f"<div style='text-align:center'>{etapas_html}</div>", unsafe_allow_html=True)
