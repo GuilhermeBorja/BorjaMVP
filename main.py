@@ -9,11 +9,11 @@ st.set_page_config(layout="wide")
 st.markdown("""
     <style>
     [data-testid="stSidebar"] { 
-        min-width: 300px; 
-        max-width: 300px;
+        min-width: 200px; 
+        max-width: 400px;
     }
     [data-testid="stSidebarNav"] {
-        width: 300px;
+        width: 250px;
     }
     </style>
 """, unsafe_allow_html=True)
