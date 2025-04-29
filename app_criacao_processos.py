@@ -2,8 +2,10 @@ import streamlit as st
 from db_connect import get_connection
 import datetime
 
+
 def combine_date_time(date_obj, time_obj):
-    return date_obj.strftime("%d/%m/%Y") + " " + time_obj.strftime("%H:%M")
+    return f"{date_obj.strftime('%d/%m/%Y')} {time_obj.strftime('%H:%M')}"
+
 
 def criar_processo():
     st.header("Criar Novo Processo")
@@ -21,10 +23,10 @@ def criar_processo():
         etapa_nome_list = []
         etapa_resp_list = []
         for i in range(1, int(etapas_quantidade)+1):
-            cols = st.columns(2)
-            with cols[0]:
+            c1, c2 = st.columns(2)
+            with c1:
                 nome_etapa = st.text_input(f"Nome da Etapa {i}", key=f"cp_nome_etapa_{i}")
-            with cols[1]:
+            with c2:
                 responsavel_etapa = st.text_input(f"Responsável da Etapa {i}", key=f"cp_resp_etapa_{i}")
             etapa_nome_list.append(nome_etapa)
             etapa_resp_list.append(responsavel_etapa)
@@ -34,28 +36,15 @@ def criar_processo():
         conn = get_connection()
         cursor = conn.cursor()
         cursor.execute(
-            '''INSERT INTO processos (nome_processo, etapas_quantidade, responsavel_geral, data_criacao, data_termino_ideal, tempo_total, status)
-               VALUES (?, ?, ?, ?, ?, ?, ?)''',
-            (
-                nome_processo,
-                int(etapas_quantidade),
-                responsavel_geral,
-                data_criacao,
-                data_termino_ideal,
-                0,
-                "Em andamento"
-            )
+            "INSERT INTO processos (nome_processo, etapas_quantidade, responsavel_geral, data_criacao, data_termino_ideal, tempo_total, status) VALUES (?,?,?,?,?,?,?)",
+            (nome_processo, etapas_quantidade, responsavel_geral, data_criacao, data_termino_ideal, "0d 0h 0m 0s", "Em andamento")
         )
-        processo_id = cursor.lastrowid
-        for i in range(len(etapa_nome_list)):
-            nome_etapa = etapa_nome_list[i]
-            responsavel_etapa = etapa_resp_list[i]
-            if nome_etapa and responsavel_etapa:
-                cursor.execute(
-                    '''INSERT INTO etapas (processo_id, nome_etapa, responsavel_etapa, tempo_gasto)
-                       VALUES (?, ?, ?, ?)''',
-                    (processo_id, nome_etapa, responsavel_etapa, 0)
-                )
+        pid = cursor.lastrowid
+        for name, resp in zip(etapa_nome_list, etapa_resp_list):
+            cursor.execute(
+                "INSERT INTO etapas (processo_id, nome_etapa, responsavel_etapa, tempo_gasto) VALUES (?,?,?,?)",
+                (pid, name, resp, "0d 0h 0m 0s")
+            )
         conn.commit()
         conn.close()
-        st.success("Processo e suas etapas criados com sucesso!")
+        st.success("Processo e etapas criados com sucesso!")
