@@ -4,32 +4,30 @@ from db_connect import get_connection
 
 def filtros_processos():
     st.sidebar.subheader("Filtros Avançados")
-    nome = st.sidebar.text_input("Nome do Processo", key="f_nome")
-
-    conn = get_connection(); cur = conn.cursor()
-    cur.execute("SELECT DISTINCT responsavel_geral FROM processos")
-    reps = [r["responsavel_geral"] for r in cur.fetchall() if r["responsavel_geral"]]
+    
+    filtro_nome = st.sidebar.text_input("Nome do Processo", key="filtro_nome")
+    
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT DISTINCT responsavel_geral FROM processos")
+    responsaveis = [row["responsavel_geral"] for row in cursor.fetchall() if row["responsavel_geral"]]
     conn.close()
-    reps.insert(0, "Todos")
-    resp = st.sidebar.selectbox("Responsável Geral", reps, key="f_resp")
-
-    status = st.sidebar.selectbox(
-        "Status",
-        ["Todos","Em andamento","No prazo","Atrasado","Concluído"],
-        key="f_status"
-    )
-
+    responsaveis.insert(0, "Todos")
+    filtro_responsavel = st.sidebar.selectbox("Responsável Geral", options=responsaveis, key="filtro_responsavel")
+    
+    filtro_status = st.sidebar.selectbox("Status", options=["Todos", "No prazo", "Atrasado", "Finalizado no prazo", "Finalizado atrasado"], key="filtro_status")
+    
     st.sidebar.markdown("### Data de Criação")
-    c1, c2 = st.sidebar.columns(2)
-    with c1:
-        di = st.date_input("Início", datetime.date.today(), key="f_di")
-    with c2:
-        df = st.date_input("Fim", datetime.date.today(), key="f_df")
-
+    col1, col2 = st.sidebar.columns(2)
+    with col1:
+        data_inicio = st.date_input("Início", datetime.date.today(), key="filtro_data_inicio")
+    with col2:
+        data_fim = st.date_input("Fim", datetime.date.today(), key="filtro_data_fim")
+    
     return {
-        "nome": nome,
-        "responsavel": resp,
-        "status": status,
-        "data_inicio": di,
-        "data_fim": df
+        "nome": filtro_nome,
+        "responsavel": filtro_responsavel,
+        "status": filtro_status,
+        "data_inicio": data_inicio,
+        "data_fim": data_fim
     }
