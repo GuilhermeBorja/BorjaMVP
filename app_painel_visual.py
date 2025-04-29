@@ -93,7 +93,7 @@ def painel_visual(user):
                 "ID": fmt_id(p["id"]),
                 "Nome": p["nome_processo"],
                 "Resp Geral": p["responsavel_geral"],
-                "Criação": format_datetime(p["data_riacao"]),
+                "Criação": format_datetime(p["data_criacao"]),
                 "Término Ideal": format_datetime(p["data_termino_ideal"]),
                 "Término Real": format_datetime(p["data_termino_real"]) if p["data_termino_real"] else "",
                 "Tempo Total": calcular_tempo_total(p, ets),
