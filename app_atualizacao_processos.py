@@ -1,100 +1,143 @@
 import streamlit as st
-from db_connect import get_connection
+import pandas as pd
 import datetime
+from db_connect import get_connection
+from app_filtros import filtros_processos
 
-# Helper para combinar data e hora no formato brasileiro sem segundos
-def combine_date_time(date_obj, time_obj):
-    return f"{date_obj.strftime('%d/%m/%Y')} {time_obj.strftime('%H:%M')}"
+# Formatação de duração
 
-# Função principal para atualizar processos
-def atualizar_processo():
-    st.title("Atualizar Processo")
+def format_timedelta(delta):
+    days = delta.days
+    seconds = delta.seconds
+    hours = seconds // 3600
+    minutes = (seconds % 3600) // 60
+    secs = seconds % 60
+    return f"{days}d {hours}h {minutes}m {secs}s"
 
-    # 3.0 – filtro lateral para nome do processo
-    filtro = st.sidebar.text_input("Filtrar por nome do processo", key="upd_filtro")
+# Cálculo de tempo total
+
+def calcular_tempo_total(processo, etapas):
+    try:
+        dt_cri = datetime.datetime.strptime(processo["data_criacao"], "%d/%m/%Y %H:%M")
+    except:
+        return ""
+    if etapas and all(et["data_termino_real"] for et in etapas):
+        dt_fin = datetime.datetime.strptime(etapas[-1]["data_termino_real"], "%d/%m/%Y %H:%M")
+        delta = dt_fin - dt_cri
+    else:
+        delta = datetime.datetime.now() - dt_cri
+    return format_timedelta(delta)
+
+# Exclusão de processo
+
+def delete_processo(pid):
     conn = get_connection()
     cursor = conn.cursor()
-    cursor.execute("SELECT id, nome_processo FROM processos WHERE nome_processo LIKE ?", (f"%{filtro}%",))
+    cursor.execute("DELETE FROM etapas WHERE processo_id=?", (pid,))
+    cursor.execute("DELETE FROM processos WHERE id=?", (pid,))
+    conn.commit()
+    conn.close()
+
+# Função principal
+
+def painel_visual(user):
+    st.title("Visualização de Processos")
+
+    # Filtros na sidebar
+    filtros = filtros_processos()
+    query = "SELECT * FROM processos WHERE 1=1"
+    params = []
+
+    # Ajuste do filtro de data (data_fim inclusivo)
+    if filtros["data_inicio"] and filtros["data_fim"]:
+        di = filtros["data_inicio"].strftime("%d/%m/%Y")
+        df = (filtros["data_fim"] + datetime.timedelta(days=1)).strftime("%d/%m/%Y")
+        query += " AND substr(data_criacao,1,10)>=? AND substr(data_criacao,1,10)<=?"
+        params += [di, df]
+
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute(query, tuple(params))
     processos = cursor.fetchall()
     conn.close()
 
-    if not processos:
-        st.info("Nenhum processo encontrado para atualizar.")
-        return
+    # Função para formatar ID com dois dígitos
+    def fmt_id(x):
+        return f"{x:02d}"
 
-    # Dropdown dinâmico com processos filtrados
-    nomes = [p['nome_processo'] for p in processos]
-    selected_name = st.selectbox("Selecione o processo", nomes, key="upd_select")
-    selected_id = next(p['id'] for p in processos if p['nome_processo'] == selected_name)
+    # CSS para botão apagar
+    st.markdown(
+        """
+        <style>
+          .btn-apagar button { white-space: nowrap; }
+        </style>
+        """, unsafe_allow_html=True
+    )
 
-    # Carrega processo e etapas
-    conn = get_connection(); cursor = conn.cursor()
-    cursor.execute("SELECT * FROM processos WHERE id = ?", (selected_id,))
-    proc = cursor.fetchone()
-    cursor.execute("SELECT * FROM etapas WHERE processo_id = ? ORDER BY id", (selected_id,))
-    etapas = cursor.fetchall()
-    conn.close()
-
-    # 3.2 – Títulos atualizados
-    st.subheader("Atualize os dados do processo")
-    # 3.1 – preenche valor atual para não zerar campos não modificados
-    nome = st.text_input("Nome do Processo", value=proc["nome_processo"], key="upd_name")
-    resp_geral = st.text_input("Responsável Geral", value=proc["responsavel_geral"], key="upd_resp")
-
-    # Data/Hora de Término Ideal com seletores
-    try:
-        dt_ideal = datetime.datetime.strptime(proc["data_termino_ideal"], "%d/%m/%Y %H:%M")
-    except:
-        dt_ideal = datetime.datetime.now()
-    novo_date_ideal = st.date_input("Data de Término Ideal", value=dt_ideal.date(), key="upd_date_ideal")
-    novo_time_ideal = st.time_input("Hora de Término Ideal", value=dt_ideal.time(), key="upd_time_ideal")
-    data_termino_ideal = combine_date_time(novo_date_ideal, novo_time_ideal)
-
-    st.subheader("Dados de Criação e tempo total")
-    st.text_input("Data de Criação", value=proc["data_criacao"], disabled=True)
-    st.text_input("Tempo Total", value=str(proc["tempo_total"]), disabled=True)
-
-    st.subheader("Atualize o Andamento das Etapas")
-    # 3.3 – adiciona/remover etapas
-    if st.button("Adicionar Etapa", key="add_step"):
-        etapas = list(etapas) + [{"id": 0, "nome_etapa": "", "responsavel_etapa": ""}]
-    if st.button("Remover Etapa", key="remove_step") and len(etapas) > 1:
-        etapas = etapas[:-1]
-
-    updated_etapas = []
-    for idx, etapa in enumerate(etapas):
-        # 3.5 – sem numeração nos labels
-        nome_et = st.text_input("Nome da Etapa", value=etapa.get("nome_etapa", ""), key=f"upd_et_name_{idx}")
-        resp_et = st.text_input("Responsável da Etapa", value=etapa.get("responsavel_etapa", ""), key=f"upd_et_resp_{idx}")
-        # 3.4 – seletor de data/hora para Término Real
-        if etapa.get("data_termino_real"):
-            try:
-                dt_real = datetime.datetime.strptime(etapa["data_termino_real"], "%d/%m/%Y %H:%M")
-            except:
-                dt_real = datetime.datetime.now()
-        else:
-            dt_real = datetime.datetime.now()
-        date_real = st.date_input("Data de Término Real", value=dt_real.date(), key=f"upd_et_date_{idx}")
-        time_real = st.time_input("Hora de Término Real", value=dt_real.time(), key=f"upd_et_time_{idx}")
-        data_termino_real = combine_date_time(date_real, time_real)
-        updated_etapas.append((etapa.get("id", 0), nome_et, resp_et, data_termino_real))
-
-    if st.button("Salvar Alterações", key="upd_save"):
-        conn = get_connection(); cursor = conn.cursor()
-        cursor.execute(
-            "UPDATE processos SET nome_processo = ?, responsavel_geral = ?, data_termino_ideal = ? WHERE id = ?",
-            (nome, resp_geral, data_termino_ideal, selected_id)
+    # Aba Sintética
+    st.subheader("Visualização Sintética")
+    if processos:
+        data = []
+        for p in processos:
+            conn = get_connection()
+            c = conn.cursor()
+            c.execute("SELECT * FROM etapas WHERE processo_id=? ORDER BY id", (p["id"],))
+            ets = c.fetchall()
+            conn.close()
+            data.append({
+                "ID": fmt_id(p["id"]),
+                "Nome": p["nome_processo"],
+                "Resp. Geral": p["responsavel_geral"],
+                "Criação": p["data_criacao"],
+                "Término Ideal": p["data_termino_ideal"],
+                "Término Real": p["data_termino_real"] or "",
+                "Tempo Total": calcular_tempo_total(p, ets),
+                "Status": p["status"]
+            })
+        df = pd.DataFrame(data)
+        styled = (
+            df.style
+              .set_properties(**{"text-align": "center"})
+              .set_table_styles([{"selector": "th", "props": [("text-align", "center")] }])
         )
-        for eid, ne, re, dtr in updated_etapas:
-            if eid and eid != 0:
-                cursor.execute(
-                    "UPDATE etapas SET nome_etapa = ?, responsavel_etapa = ?, data_termino_real = ? WHERE id = ?",
-                    (ne, re, dtr, eid)
-                )
+        st.dataframe(styled, use_container_width=True)
+
+        for p in processos:
+            if st.button("Apagar", key=f"del_{p['id']}", css_class="btn-apagar"):
+                delete_processo(p["id"])
+                st.experimental_rerun()
+    else:
+        st.info("Nenhum processo encontrado.")
+
+    # Aba Analítica
+    st.subheader("Visualização Analítica")
+    for p in processos:
+        st.markdown(f"**{p['nome_processo']}**")
+        conn = get_connection()
+        c = conn.cursor()
+        c.execute("SELECT * FROM etapas WHERE processo_id=? ORDER BY id", (p["id"],))
+        ets = c.fetchall()
+        conn.close()
+
+        dt_prev = datetime.datetime.strptime(p["data_criacao"], "%d/%m/%Y %H:%M")
+        html = "<div style='text-align:center'>"
+        for idx, et in enumerate(ets):
+            cor = "#28a745" if et["data_termino_real"] else "#ffc107"
+            if et["data_termino_real"]:
+                dt_now = datetime.datetime.strptime(et["data_termino_real"], "%d/%m/%Y %H:%M")
             else:
-                cursor.execute(
-                    "INSERT INTO etapas (processo_id, nome_etapa, responsavel_etapa, tempo_gasto, data_termino_real) VALUES (?, ?, ?, 0, ?)",
-                    (selected_id, ne, re, dtr)
-                )
-        conn.commit(); conn.close()
-        st.success("Processo e etapas atualizados com sucesso!")
+                dt_now = datetime.datetime.now()
+            tempo = format_timedelta(dt_now - dt_prev)
+            dt_prev = dt_now
+            html += f"""
+              <div style="display:inline-block;margin:10px;text-align:center;">
+                <div style="width:60px;height:60px;border-radius:50%;background-color:{cor};display:flex;align-items:center;justify-content:center;">
+                  <span style="font-size:10px;word-wrap:break-word;">{et['nome_etapa']}</span>
+                </div>
+                <div style="font-size:10px;text-align:center;">{et['responsavel_etapa']}<br>{tempo}</div>
+              </div>
+            """
+            if idx < len(ets) - 1:
+                html += "<span style='display:inline-flex;align-items:center;font-size:24px;'>&#8594;</span>"
+        html += "</div>"
+        st.markdown(html, unsafe_allow_html=True)
