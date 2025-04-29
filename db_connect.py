@@ -7,56 +7,41 @@ def get_connection():
     conn.row_factory = sqlite3.Row
     return conn
 
-def create_tables():
-    conn = get_connection()
-    cursor = conn.cursor()
 
-    # Tabela de usuários para login e hierarquia
-    cursor.execute('''
+def create_tables():
+    conn = get_connection(); cur = conn.cursor()
+    cur.execute('''
         CREATE TABLE IF NOT EXISTS users (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-            username TEXT NOT NULL UNIQUE,
-            password TEXT NOT NULL,
-            nivel INTEGER NOT NULL
-        )
-    ''')
-
-    # Tabela de processos – inclui data_termino_real para atualização posterior
-    cursor.execute('''
+            username TEXT UNIQUE,
+            password TEXT,
+            nivel INTEGER
+        )''')
+    cur.execute('''
         CREATE TABLE IF NOT EXISTS processos (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-            nome_processo TEXT NOT NULL,
+            nome_processo TEXT,
             etapas_quantidade INTEGER,
             responsavel_geral TEXT,
             data_criacao TEXT,
             data_termino_ideal TEXT,
-            data_termino_real TEXT,
-            tempo_total REAL,
+            tempo_total TEXT,
             status TEXT
-        )
-    ''')
-
-    # Tabela de etapas – inclui data_termino_real para cada etapa
-    cursor.execute('''
+        )''')
+    cur.execute('''
         CREATE TABLE IF NOT EXISTS etapas (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             processo_id INTEGER,
             nome_etapa TEXT,
             responsavel_etapa TEXT,
-            tempo_gasto REAL,
+            tempo_gasto TEXT,
             data_termino_real TEXT,
-            FOREIGN KEY (processo_id) REFERENCES processos(id)
-        )
-    ''')
-
+            FOREIGN KEY(processo_id) REFERENCES processos(id)
+        )''')
     conn.commit()
-
-    # Insere o usuário admin de forma definitiva.
-    cursor.execute("INSERT OR IGNORE INTO users (username, password, nivel) VALUES (?, ?, ?)", ("admin", "admin", 10))
-    conn.commit()
-
-    conn.close()
+    cur.execute("INSERT OR IGNORE INTO users (username, password, nivel) VALUES (?,?,?)", ("admin","admin",10))
+    conn.commit(); conn.close()
 
 if __name__ == "__main__":
     create_tables()
-    print("Tabelas criadas com sucesso e usuário admin inserido permanentemente!")
+    print("Banco inicializado e usuário admin garantido.")
