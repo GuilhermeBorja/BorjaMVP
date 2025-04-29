@@ -5,7 +5,7 @@ from app_atualizacao_processos import atualizar_processo
 from app_painel_visual import painel_visual
 from db_connect import create_tables
 
-# Definir layout antes de qualquer outro comando Streamlit
+# Definir layout no início
 st.set_page_config(layout="wide")
 st.markdown("""
     <style>
@@ -19,14 +19,12 @@ def main():
     create_tables()
     st.title("Gestão de Processos e Tarefas")
 
-    # Login
     if 'user' not in st.session_state:
         login()
         if 'user' not in st.session_state:
             st.stop()
         st.session_state.pagina = "visualizar"
 
-    # Logout
     if st.sidebar.button("Logout", key="logout_button"):
         st.session_state.clear()
         st.set_query_params(page="login")
@@ -34,7 +32,6 @@ def main():
 
     st.sidebar.write(f"Usuário: {st.session_state.user['username']} (Nível {st.session_state.user['nivel']})")
 
-    # Navegação
     st.sidebar.markdown("### Ações")
     if st.sidebar.button("Visualizar Processos", key="btn_visualizar"): st.session_state.pagina = "visualizar"
     if st.sidebar.button("Criar Processo", key="btn_criar"): st.session_state.pagina = "criar"
