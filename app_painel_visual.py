@@ -3,140 +3,146 @@ import pandas as pd
 import datetime
 from db_connect import get_connection
 from app_filtros import filtros_processos
-from dateutil import tz
-
-# 1.0 – Detecta o fuso horário do navegador (via JS) e converte para exibir localmente
-def get_local_now():
-    # pega o offset do navegador (em minutos) do componente JS
-    offset = st.experimental_get_query_params().get("tz_offset", [0])[0]
-    now_utc = datetime.datetime.utcnow().replace(tzinfo=tz.UTC)
-    local = now_utc.astimezone(tz.tzoffset(None, -int(offset)*60))
-    return local
-
-def format_datetime(dt_str):
-    # Espera formatos "DD/MM/YYYY HH:MM"
-    try:
-        dt = datetime.datetime.strptime(dt_str, "%d/%m/%Y %H:%M")
-        return dt.strftime("%d/%m/%Y %H:%M")
-    except:
-        return dt_str
 
 def format_timedelta(delta):
-    d, s = delta.days, delta.seconds
-    h = s//3600; m=(s%3600)//60; s=s%60
-    return f"{d}d {h}h {m}m {s}s"
+    days = delta.days
+    seconds = delta.seconds
+    hours = seconds // 3600
+    minutes = (seconds % 3600) // 60
+    secs = seconds % 60
+    return f"{days}d {hours}h {minutes}m {secs}s"
 
 def calcular_tempo_total(processo, etapas):
+    """Calcula o lead time do processo usando datetime.now() (naive), garantindo compatibilidade."""
     try:
         dt_cri = datetime.datetime.strptime(processo["data_criacao"], "%d/%m/%Y %H:%M")
     except:
         return ""
     if etapas and all(et["data_termino_real"] for et in etapas):
-        ultima = etapas[-1]["data_termino_real"]
-        dt_fin = datetime.datetime.strptime(ultima, "%d/%m/%Y %H:%M")
+        dt_fin = datetime.datetime.strptime(etapas[-1]["data_termino_real"], "%d/%m/%Y %H:%M")
         delta = dt_fin - dt_cri
     else:
-        delta = get_local_now() - dt_cri
+        delta = datetime.datetime.now() - dt_cri
     return format_timedelta(delta)
 
 def delete_processo(pid):
-    conn = get_connection(); c=conn.cursor()
-    c.execute("DELETE FROM etapas WHERE processo_id=?", (pid,))
-    c.execute("DELETE FROM processos WHERE id=?", (pid,))
-    conn.commit(); conn.close()
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute("DELETE FROM etapas WHERE processo_id=?", (pid,))
+    cursor.execute("DELETE FROM processos WHERE id=?", (pid,))
+    conn.commit()
+    conn.close()
 
 def painel_visual(user):
+    st.set_page_config(layout="wide")
     st.title("Visualização de Processos")
-    # injeta script para pegar timezone offset (chama uma vez)
-    st.markdown("""
-      <script>
-        var tz = new Date().getTimezoneOffset();
-        window.parent.postMessage({func:'setTz', tz_offset:tz}, '*');
-      </script>
-    """, unsafe_allow_html=True)
 
-    tabs = st.tabs(["Sintética", "Analítica"])
-
+    # Filtros
     filtros = filtros_processos()
-    q = "SELECT * FROM processos WHERE 1=1"; params=[]
-    # 2.0 – filtro data fim inclusivo
+    q = "SELECT * FROM processos WHERE 1=1"
+    params = []
+
+    # 2.0 – corrigir filtro de data_fim inclusivo
     if filtros["data_inicio"] and filtros["data_fim"]:
         di = filtros["data_inicio"].strftime("%d/%m/%Y")
-        df = filtros["data_fim"] + datetime.timedelta(days=1)
-        df = df.strftime("%d/%m/%Y")
+        df = (filtros["data_fim"] + datetime.timedelta(days=1)).strftime("%d/%m/%Y")
         q += " AND substr(data_criacao,1,10)>=? AND substr(data_criacao,1,10)<=?"
         params += [di, df]
-    # demais filtros...
-    conn = get_connection(); c=conn.cursor()
-    c.execute(q, tuple(params)); processos = c.fetchall(); conn.close()
 
-    # 2.1 – formata ID com zeros à esquerda
-    def fmt_id(i): return f"{i:02d}"
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute(q, tuple(params))
+    processos = cursor.fetchall()
+    conn.close()
 
-    # 2.2 – CSS para botão apagar não quebrar linha
+    # 2.1 – exibir ID com zero à esquerda
+    def fmt_id(x): return f"{x:02d}"
+
+    # 2.2 – CSS para botão apagar não quebrar
     st.markdown("""
-        <style>
-          .apagar-btn button { white-space: nowrap; }
-        </style>
+    <style>
+      .btn-apagar button { white-space: nowrap; }
+    </style>
     """, unsafe_allow_html=True)
 
-    with tabs[0]:
-        if not processos:
-            st.info("Nenhum processo")
-            return
-        df = []
+    # Sintética
+    st.subheader("Visualização Sintética")
+    if processos:
+        data = []
         for p in processos:
-            c = get_connection().cursor()
+            conn = get_connection()
+            c = conn.cursor()
             c.execute("SELECT * FROM etapas WHERE processo_id=? ORDER BY id", (p["id"],))
-            ets = c.fetchall(); c.connection.close()
-            df.append({
+            ets = c.fetchall()
+            conn.close()
+            data.append({
                 "ID": fmt_id(p["id"]),
                 "Nome": p["nome_processo"],
-                "Resp Geral": p["responsavel_geral"],
-                "Criação": format_datetime(p["data_criacao"]),
-                "Término Ideal": format_datetime(p["data_termino_ideal"]),
-                "Término Real": format_datetime(p["data_termino_real"]) if p["data_termino_real"] else "",
+                "Resp. Geral": p["responsavel_geral"],
+                "Criação": p["data_criacao"],
+                "Término Ideal": p["data_termino_ideal"],
+                "Término Real": p["data_termino_real"] or "",
                 "Tempo Total": calcular_tempo_total(p, ets),
                 "Status": p["status"]
             })
-        tbl = pd.DataFrame(df)
-        st.dataframe(tbl.style.set_properties(**{"text-align":"center"}).set_table_styles(
-            [{"selector":"th","props":[("text-align","center")]}]
-        ), use_container_width=True)
+        df = pd.DataFrame(data)
+        # Centraliza cabeçalho e células
+        styled = (df.style
+                    .set_properties(**{"text-align": "center"})
+                    .set_table_styles([{"selector":"th","props":[("text-align","center")]}]))
+        st.dataframe(styled, use_container_width=True)
 
+        # Botões apagar
         for p in processos:
-            css = '<div class="apagar-btn">' + st.button("Apagar", key=f"del_{p['id']}") and delete_processo(p["id"]) or "" + '</div>'
-            st.markdown(css, unsafe_allow_html=True)
+            placeholder = st.empty()
+            with placeholder.container():
+                class_name = "btn-apagar"
+                if st.button("Apagar", key=f"del_{p['id']}", help="Remove o processo", args=None):
+                    delete_processo(p["id"])
+                    st.experimental_rerun()
+    else:
+        st.info("Nenhum processo encontrado.")
 
-    with tabs[1]:
-        st.subheader("Visualização Analítica")
-        for p in processos:
-            st.markdown(f"**{p['nome_processo']}**")
-            c = get_connection().cursor()
-            c.execute("SELECT * FROM etapas WHERE processo_id=? ORDER BY id", (p["id"],))
-            ets = c.fetchall(); c.connection.close()
-            tempos = []
-            dt_prev = datetime.datetime.strptime(p["data_criacao"], "%d/%m/%Y %H:%M")
-            for et in ets:
-                if et["data_termino_real"]:
-                    dt_now = datetime.datetime.strptime(et["data_termino_real"], "%d/%m/%Y %H:%M")
-                else:
-                    dt_now = get_local_now()
-                delta = dt_now - dt_prev
-                tempos.append(format_timedelta(delta))
-                dt_prev = dt_now
-            # monta HTML centralizado
-            html = ""
-            for idx, et in enumerate(ets):
-                cor = "#28a745" if et["data_termino_real"] else "#ffc107"
-                html += f"""
-                  <div style="display:inline-block;text-align:center;margin:10px;">
-                    <div style="width:60px;height:60px;border-radius:50%;background:{cor};
-                                display:flex;align-items:center;justify-content:center;">
-                      <span style="font-size:10px;word-wrap:break-word;">{et['nome_etapa']}</span>
-                    </div>
-                    <div style="font-size:10px;text-align:center;">{et['responsavel_etapa']}<br>{tempos[idx]}</div>
-                  </div>
-                  {('<span style=\"display:inline-flex;align-items:center;font-size:24px;\">&#8594;</span>') if idx<len(ets)-1 else ''}
-                """
-            st.markdown(f"<div style='text-align:center'>{html}</div>", unsafe_allow_html=True)
+    # Analítica
+    st.subheader("Visualização Analítica")
+    for p in processos:
+        st.markdown(f"**{p['nome_processo']}**")
+        conn = get_connection()
+        c = conn.cursor()
+        c.execute("SELECT * FROM etapas WHERE processo_id=? ORDER BY id", (p["id"],))
+        ets = c.fetchall()
+        conn.close()
+
+        dt_prev = datetime.datetime.strptime(p["data_criacao"], "%d/%m/%Y %H:%M")
+        html = "<div style='text-align:center'>"
+        for idx, et in enumerate(ets):
+            # cor por status da etapa
+            cor = "#28a745" if et["data_termino_real"] else "#ffc107"
+            # cálculo de tempo de cada etapa
+            if et["data_termino_real"]:
+                dt_now = datetime.datetime.strptime(et["data_termino_real"], "%d/%m/%Y %H:%M")
+            else:
+                dt_now = datetime.datetime.now()
+            tempo = format_timedelta(dt_now - dt_prev)
+            dt_prev = dt_now
+
+            html += f"""
+              <div style="display:inline-block;margin:10px;text-align:center;">
+                <div style="
+                  width:60px;height:60px;
+                  border-radius:50%;
+                  background-color:{cor};
+                  display:flex;align-items:center;justify-content:center;
+                ">
+                  <span style="font-size:10px;word-wrap:break-word;">{et['nome_etapa']}</span>
+                </div>
+                <div style="font-size:10px;text-align:center;">
+                  {et['responsavel_etapa']}<br>{tempo}
+                </div>
+              </div>
+            """
+            if idx < len(ets)-1:
+                html += """<span style="display:inline-flex;align-items:center;font-size:24px;">&#8594;</span>"""
+
+        html += "</div>"
+        st.markdown(html, unsafe_allow_html=True)
