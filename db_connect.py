@@ -7,16 +7,18 @@ def get_connection():
     conn.row_factory = sqlite3.Row
     return conn
 
-
 def create_tables():
-    conn = get_connection(); cur = conn.cursor()
+    conn = get_connection()
+    cur = conn.cursor()
+
     cur.execute('''
         CREATE TABLE IF NOT EXISTS users (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             username TEXT UNIQUE,
             password TEXT,
             nivel INTEGER
-        )''')
+        )
+    ''')
     cur.execute('''
         CREATE TABLE IF NOT EXISTS processos (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -25,9 +27,11 @@ def create_tables():
             responsavel_geral TEXT,
             data_criacao TEXT,
             data_termino_ideal TEXT,
+            data_termino_real TEXT,
             tempo_total TEXT,
             status TEXT
-        )''')
+        )
+    ''')
     cur.execute('''
         CREATE TABLE IF NOT EXISTS etapas (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -37,10 +41,12 @@ def create_tables():
             tempo_gasto TEXT,
             data_termino_real TEXT,
             FOREIGN KEY(processo_id) REFERENCES processos(id)
-        )''')
+        )
+    ''')
     conn.commit()
-    cur.execute("INSERT OR IGNORE INTO users (username, password, nivel) VALUES (?,?,?)", ("admin","admin",10))
-    conn.commit(); conn.close()
+    cur.execute("INSERT OR IGNORE INTO users (username,password,nivel) VALUES (?,?,?)", ("admin","admin",10))
+    conn.commit()
+    conn.close()
 
 if __name__ == "__main__":
     create_tables()
