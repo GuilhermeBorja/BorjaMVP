@@ -39,11 +39,14 @@ def main():
         if 'user' not in st.session_state:
             return
         st.session_state.pagina = "visualizar"
+        st.rerun()  # Force a rerun to show the visualizar page immediately
 
     # logout
     if st.sidebar.button("Logout"):
-        st.session_state.clear()
-        st.set_query_params(page="login")
+        # Clear all session state variables
+        for key in list(st.session_state.keys()):
+            del st.session_state[key]
+        st.rerun()  # Force a rerun to return to login page
         return
 
     st.sidebar.write(f"Usuário: {st.session_state.user['username']} (Nível {st.session_state.user['nivel']})")
