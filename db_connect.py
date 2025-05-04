@@ -1,7 +1,10 @@
 import sqlite3
 import hashlib
+import os
 
-DATABASE = 'app.db'
+# Obtém o diretório atual do arquivo
+current_dir = os.path.dirname(os.path.abspath(__file__))
+DATABASE = os.path.join(current_dir, 'app.db')
 
 def hash_password(password):
     """Função para criar hash da senha"""
