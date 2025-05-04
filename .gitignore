@@ -29,8 +29,5 @@ env/
 .vscode/
 .idea/
 
-# Database
-*.db
-
 # Logs
 *.log 
