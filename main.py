@@ -3,6 +3,7 @@ from app_login import login
 from app_criacao_processos import criar_processo
 from app_atualizacao_processos import atualizar_processo
 from app_painel_visual import painel_visual
+from app_cadastro_usuarios import cadastro_usuarios
 from db_connect import create_tables
 
 # 1) layout wide
@@ -39,14 +40,14 @@ def main():
         if 'user' not in st.session_state:
             return
         st.session_state.pagina = "visualizar"
-        st.rerun()  # Force a rerun to show the visualizar page immediately
+        st.rerun()  # Atualizado de experimental_rerun para rerun
 
     # logout
     if st.sidebar.button("Logout"):
         # Clear all session state variables
         for key in list(st.session_state.keys()):
             del st.session_state[key]
-        st.rerun()  # Force a rerun to return to login page
+        st.rerun()  # Atualizado de experimental_rerun para rerun
         return
 
     st.sidebar.write(f"Usuário: {st.session_state.user['username']} (Nível {st.session_state.user['nivel']})")
@@ -54,13 +55,19 @@ def main():
     if st.sidebar.button("Visualizar Processos"): st.session_state.pagina="visualizar"
     if st.sidebar.button("Criar Processo"): st.session_state.pagina="criar"
     if st.sidebar.button("Atualizar Processo"): st.session_state.pagina="atualizar"
+    
+    # Adiciona botão de cadastro de usuários apenas para administradores (nível 10)
+    if st.session_state.user['nivel'] == 10:
+        if st.sidebar.button("Cadastro de Usuários"): st.session_state.pagina="cadastro_usuarios"
 
     if st.session_state.pagina=="visualizar":
         painel_visual(st.session_state.user)
     elif st.session_state.pagina=="criar":
         criar_processo()
-    else:
+    elif st.session_state.pagina=="atualizar":
         atualizar_processo()
+    elif st.session_state.pagina=="cadastro_usuarios":
+        cadastro_usuarios()
 
 if __name__=="__main__":
     main()

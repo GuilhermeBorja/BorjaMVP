@@ -1,6 +1,11 @@
 import sqlite3
+import hashlib
 
 DATABASE = 'app.db'
+
+def hash_password(password):
+    """Função para criar hash da senha"""
+    return hashlib.sha256(password.encode()).hexdigest()
 
 def get_connection():
     conn = sqlite3.connect(DATABASE, check_same_thread=False)
@@ -17,7 +22,12 @@ def create_tables():
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             username TEXT NOT NULL UNIQUE,
             password TEXT NOT NULL,
-            nivel INTEGER NOT NULL
+            nivel INTEGER NOT NULL,
+            estado TEXT NOT NULL,
+            empresa TEXT NOT NULL,
+            setor TEXT NOT NULL,
+            email TEXT NOT NULL,
+            nome_amigavel TEXT NOT NULL
         )
     ''')
 
@@ -51,8 +61,13 @@ def create_tables():
 
     conn.commit()
 
-    # Insere o usuário admin de forma definitiva.
-    cursor.execute("INSERT OR IGNORE INTO users (username, password, nivel) VALUES (?, ?, ?)", ("admin", "admin", 10))
+    # Insere o usuário admin de forma definitiva com senha com hash
+    hashed_admin_password = hash_password("admin")
+    cursor.execute("""
+        INSERT OR IGNORE INTO users 
+        (username, password, nivel, estado, empresa, setor, email, nome_amigavel) 
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    """, ("admin", hashed_admin_password, 10, "SP", "Admin", "TI", "admin@admin.com", "Administrador"))
     conn.commit()
 
     conn.close()

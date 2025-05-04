@@ -1,21 +1,52 @@
 import streamlit as st
 from db_connect import get_connection
-import datetime
+from datetime import datetime
 
-def combine_date_time(date_obj, time_obj):
-    return date_obj.strftime("%d/%m/%Y") + " " + time_obj.strftime("%H:%M")
+def combine_date_time(date, time):
+    return datetime.combine(date, time).strftime("%d/%m/%Y %H:%M")
+
+def get_users():
+    """Retorna lista de usuários cadastrados"""
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT username, nome_amigavel FROM users ORDER BY nome_amigavel")
+    users = cursor.fetchall()
+    conn.close()
+    return [(user['username'], user['nome_amigavel']) for user in users]
+
+def check_create_permission(user):
+    """Verifica se o usuário tem permissão para criar processos"""
+    nivel = user.get('nivel', 0)
+    return nivel in [1, 3, 5, 7, 9, 10]  # Níveis que podem criar processos
 
 def criar_processo():
-    st.header("Criar Novo Processo")
-    col_main, col_etapas = st.columns(2)
+    # Verifica se o usuário está logado
+    if 'user' not in st.session_state:
+        st.error("Você precisa estar logado para acessar esta página.")
+        return
 
+    user = st.session_state.user
+
+    # Verifica permissão de criação
+    if not check_create_permission(user):
+        st.error("Você não tem permissão para criar processos.")
+        return
+
+    st.title("Criar Novo Processo")
+    
+    # Busca lista de usuários
+    users = get_users()
+    user_options = [f"{username} ({nome_amigavel})" for username, nome_amigavel in users]
+    
+    col_main, col_etapas = st.columns([1, 1])
     with col_main:
         nome_processo = st.text_input("Nome do Processo", key="cp_nome_processo")
-        responsavel_geral = st.text_input("Responsável Geral", key="cp_responsavel_geral")
+        responsavel_geral = st.selectbox("Responsável Geral", options=user_options, key="cp_responsavel_geral")
         etapas_quantidade = st.number_input("Quantidade de Etapas", min_value=1, step=1, value=1, key="cp_qtd_etapas")
         dt_ideal_date = st.date_input("Data de Término Ideal", key="cp_data_termino_ideal_date")
         dt_ideal_time = st.time_input("Hora de Término Ideal", key="cp_data_termino_ideal_time")
         data_termino_ideal = combine_date_time(dt_ideal_date, dt_ideal_time)
+    
     with col_etapas:
         st.subheader("Configurar Etapas")
         etapa_nome_list = []
@@ -25,37 +56,49 @@ def criar_processo():
             with cols[0]:
                 nome_etapa = st.text_input(f"Nome da Etapa {i}", key=f"cp_nome_etapa_{i}")
             with cols[1]:
-                responsavel_etapa = st.text_input(f"Responsável da Etapa {i}", key=f"cp_resp_etapa_{i}")
+                responsavel_etapa = st.selectbox(f"Responsável da Etapa {i}", options=user_options, key=f"cp_resp_etapa_{i}")
             etapa_nome_list.append(nome_etapa)
             etapa_resp_list.append(responsavel_etapa)
 
-    if st.button("Salvar Processo", key="botao_salvar_processo"):
-        data_criacao = datetime.datetime.now().strftime("%d/%m/%Y %H:%M")
+    if st.button("Criar Processo", key="cp_criar"):
+        if not nome_processo:
+            st.error("Nome do processo é obrigatório!")
+            return
+        
         conn = get_connection()
         cursor = conn.cursor()
-        cursor.execute(
-            '''INSERT INTO processos (nome_processo, etapas_quantidade, responsavel_geral, data_criacao, data_termino_ideal, tempo_total, status)
-               VALUES (?, ?, ?, ?, ?, ?, ?)''',
-            (
-                nome_processo,
-                int(etapas_quantidade),
-                responsavel_geral,
-                data_criacao,
-                data_termino_ideal,
-                0,
-                "Em andamento"
-            )
-        )
+        
+        # Insere o processo
+        cursor.execute("""
+            INSERT INTO processos 
+            (nome_processo, responsavel_geral, data_termino_ideal, data_criacao, status)
+            VALUES (?, ?, ?, ?, ?)
+        """, (
+            nome_processo,
+            responsavel_geral.split(" (")[0],  # Pega apenas o username
+            data_termino_ideal,
+            datetime.now().strftime("%d/%m/%Y %H:%M"),
+            "Em andamento"
+        ))
+        
         processo_id = cursor.lastrowid
-        for i in range(len(etapa_nome_list)):
-            nome_etapa = etapa_nome_list[i]
-            responsavel_etapa = etapa_resp_list[i]
-            if nome_etapa and responsavel_etapa:
-                cursor.execute(
-                    '''INSERT INTO etapas (processo_id, nome_etapa, responsavel_etapa, tempo_gasto)
-                       VALUES (?, ?, ?, ?)''',
-                    (processo_id, nome_etapa, responsavel_etapa, 0)
-                )
+        
+        # Insere as etapas
+        for nome, resp in zip(etapa_nome_list, etapa_resp_list):
+            if nome:  # Só insere se tiver nome
+                cursor.execute("""
+                    INSERT INTO etapas 
+                    (processo_id, nome_etapa, responsavel_etapa)
+                    VALUES (?, ?, ?)
+                """, (
+                    processo_id,
+                    nome,
+                    resp.split(" (")[0]  # Pega apenas o username
+                ))
+        
         conn.commit()
         conn.close()
-        st.success("Processo e suas etapas criados com sucesso!")
+        
+        st.success("Processo criado com sucesso!")
+        st.session_state.pagina = "visualizar"
+        st.rerun()

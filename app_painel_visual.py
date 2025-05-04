@@ -5,14 +5,13 @@ from db_connect import get_connection
 from app_filtros import filtros_processos
 
 def get_local_now():
-    # Get current time in local timezone
-    return datetime.datetime.now()
+    return datetime.datetime.now() + datetime.timedelta(hours=st.session_state.get('tz_offset', 0)/60)
 
 def format_timedelta(delta):
-    d, s = delta.days, delta.seconds
-    h, m = s//3600, (s%3600)//60
-    s = s%60
-    return f"{d}d {h}h {m}m {s}s"
+    days = delta.days
+    hours = delta.seconds // 3600
+    minutes = (delta.seconds % 3600) // 60
+    return f"{days}d {hours}h {minutes}m"
 
 def calcular_tempo_total(processo, etapas):
     try:
@@ -26,27 +25,88 @@ def calcular_tempo_total(processo, etapas):
         delta = get_local_now() - dt0
     return format_timedelta(delta)
 
-def delete_processo(pid):
-    conn = get_connection(); c=conn.cursor()
-    c.execute("DELETE FROM etapas WHERE processo_id=?", (pid,))
-    c.execute("DELETE FROM processos WHERE id=?", (pid,))
-    conn.commit(); conn.close()
+def get_user_access_filter(user):
+    """Retorna a condição SQL baseada no nível de acesso do usuário"""
+    nivel = user.get('nivel', 0)
+    username = user.get('username', '')
+    estado = user.get('estado', '')
+    empresa = user.get('empresa', '')
+    setor = user.get('setor', '')
+
+    if nivel == 10:  # Admin - acesso total
+        return "1=1", []
+    
+    # Busca informações dos responsáveis
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute("""
+        SELECT username, estado, empresa, setor 
+        FROM users 
+        WHERE username IN (
+            SELECT DISTINCT responsavel_geral FROM processos
+            UNION
+            SELECT DISTINCT responsavel_etapa FROM etapas
+        )
+    """)
+    responsaveis = {row['username']: row for row in cursor.fetchall()}
+    conn.close()
+
+    if nivel == 1:  # Apenas dados criados pelo usuário
+        return "responsavel_geral = ?", [username]
+    elif nivel == 2:  # Visualizar dados do estado
+        return "responsavel_geral IN (SELECT username FROM users WHERE estado = ?)", [estado]
+    elif nivel == 3:  # Editar dados do estado
+        return "responsavel_geral IN (SELECT username FROM users WHERE estado = ?)", [estado]
+    elif nivel == 4:  # Visualizar dados do setor
+        return "responsavel_geral IN (SELECT username FROM users WHERE setor = ?)", [setor]
+    elif nivel == 5:  # Editar dados do setor
+        return "responsavel_geral IN (SELECT username FROM users WHERE setor = ?)", [setor]
+    elif nivel == 6:  # Visualizar dados da empresa
+        return "responsavel_geral IN (SELECT username FROM users WHERE empresa = ?)", [empresa]
+    elif nivel == 7:  # Editar dados da empresa
+        return "responsavel_geral IN (SELECT username FROM users WHERE empresa = ?)", [empresa]
+    elif nivel == 8:  # Visualizar todos os dados
+        return "1=1", []
+    elif nivel == 9:  # Editar todos os dados
+        return "1=1", []
+    else:
+        return "1=0", []  # Nenhum acesso
 
 def painel_visual(user):
     st.header("Visualização de Processos")
     filtros = filtros_processos()
 
-    query = "SELECT * FROM processos WHERE 1=1"
-    params = []
+    # Obtém a condição de acesso baseada no nível do usuário
+    access_condition, access_params = get_user_access_filter(user)
+    
+    # Monta a query base
+    query = "SELECT * FROM processos WHERE " + access_condition
+    params = access_params
+
+    # Adiciona filtros do usuário
+    if filtros["nome"]:
+        query += " AND nome_processo LIKE ?"
+        params.append(f"%{filtros['nome']}%")
+    
+    if filtros["responsavel"] and filtros["responsavel"] != "Todos":
+        query += " AND responsavel_geral = ?"
+        params.append(filtros["responsavel"])
+    
+    if filtros["status"] and filtros["status"] != "Todos":
+        query += " AND status = ?"
+        params.append(filtros["status"])
+    
     if filtros["data_inicio"] and filtros["data_fim"]:
         d0 = filtros["data_inicio"].strftime("%d/%m/%Y")
         d1 = (filtros["data_fim"] + datetime.timedelta(days=1)).strftime("%d/%m/%Y")
         query += " AND substr(data_criacao,1,10)>=? AND substr(data_criacao,1,10)<=?"
         params += [d0, d1]
 
-    conn = get_connection(); cur=conn.cursor()
+    conn = get_connection()
+    cur = conn.cursor()
     cur.execute(query, tuple(params))
-    procs = cur.fetchall(); conn.close()
+    procs = cur.fetchall()
+    conn.close()
 
     def fmt_id(x): return f"{x:02d}"
 
@@ -63,7 +123,8 @@ def painel_visual(user):
                 for p in procs:
                     c = get_connection().cursor()
                     c.execute("SELECT * FROM etapas WHERE processo_id=? ORDER BY id", (p["id"],))
-                    ets = c.fetchall(); c.connection.close()
+                    ets = c.fetchall()
+                    c.connection.close()
                     df.append({
                         "ID": fmt_id(p["id"]),
                         "Nome": p["nome_processo"],
@@ -88,12 +149,15 @@ def painel_visual(user):
                     # Create a row with edit and delete buttons
                     col_edit, col_del = st.columns(2)
                     with col_edit:
-                        if st.button("✏️", key=f"edit_{p['id']}", help="Editar processo"):
+                        # Verifica se o usuário tem permissão para editar
+                        can_edit = user['nivel'] in [3, 5, 7, 9, 10] or p['responsavel_geral'] == user['username']
+                        if can_edit and st.button("✏️", key=f"edit_{p['id']}", help="Editar processo"):
                             st.session_state.pagina = "atualizar"
                             st.session_state.processo_para_editar = p["id"]
                             st.rerun()
                     with col_del:
-                        if st.button("🗑️", key=f"del_{p['id']}", help="Apagar processo"):
+                        # Apenas admin pode deletar
+                        if user['nivel'] == 10 and st.button("🗑️", key=f"del_{p['id']}", help="Apagar processo"):
                             delete_processo(p["id"])
                             st.rerun()
         else:
@@ -104,7 +168,8 @@ def painel_visual(user):
             st.markdown(f"### {p['nome_processo']}")
             c = get_connection().cursor()
             c.execute("SELECT * FROM etapas WHERE processo_id=? ORDER BY id", (p["id"],))
-            ets = c.fetchall(); c.connection.close()
+            ets = c.fetchall()
+            c.connection.close()
             dt_prev = datetime.datetime.strptime(p["data_criacao"], "%d/%m/%Y %H:%M")
             seq=[]
             for idx, e in enumerate(ets):
@@ -130,3 +195,11 @@ def painel_visual(user):
                     seq.append('<span style="display:inline-flex;align-items:center;font-size:24px;">&#8594;</span>')
             html = "<div style='text-align:center'>" + "".join(seq) + "</div>"
             st.markdown(html, unsafe_allow_html=True)
+
+def delete_processo(pid):
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute("DELETE FROM etapas WHERE processo_id=?", (pid,))
+    cursor.execute("DELETE FROM processos WHERE id=?", (pid,))
+    conn.commit()
+    conn.close()
